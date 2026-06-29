@@ -6,7 +6,7 @@ out vec4 FragColor;
 
 uniform sampler2D Texture0;
 uniform vec4 objColor;
-uniform bool isTexured = false;
+uniform bool isTexured;
 
 void main()
 {

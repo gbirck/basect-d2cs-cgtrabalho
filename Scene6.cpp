@@ -11,33 +11,33 @@ struct PointLightData {
 };
 
 static PointLightData gPointLights[] = {
-    // SM_Light_bulb – central frente
-    { glm::vec3(0.444f,  2.169f,  0.561f),
+	// SM_Light_bulb – central frente
+	{ glm::vec3(0.444f,  2.169f,  0.561f),
 	  glm::vec3(0.08f, 0.065f, 0.03f),
 	  glm::vec3(2.5f, 2.1f, 1.3f),
 	  glm::vec3(1.0f, 0.95f, 0.8f),
 	  1.0f, 0.22f, 0.08f },
 
-    // SM_Light_bulb001 – direita
-    { glm::vec3(2.938f,  2.169f,  0.561f),
-	  glm::vec3(0.08f, 0.065f, 0.03f),
-	  glm::vec3(2.5f, 2.1f, 1.3f),
-	  glm::vec3(1.0f, 0.95f, 0.8f),
-	  1.0f, 0.22f, 0.08f },
+	  // SM_Light_bulb001 – direita
+	  { glm::vec3(2.938f,  2.169f,  0.561f),
+		glm::vec3(0.08f, 0.065f, 0.03f),
+		glm::vec3(2.5f, 2.1f, 1.3f),
+		glm::vec3(1.0f, 0.95f, 0.8f),
+		1.0f, 0.22f, 0.08f },
 
-    // SM_Light_bulb002 – esquerda
-    { glm::vec3(-1.451f,  2.169f,  0.561f),
-	  glm::vec3(0.08f, 0.065f, 0.03f),
-	  glm::vec3(2.5f, 2.1f, 1.3f),
-	  glm::vec3(1.0f, 0.95f, 0.8f),
-	  1.0f, 0.22f, 0.08f },
+		// SM_Light_bulb002 – esquerda
+		{ glm::vec3(-1.451f,  2.169f,  0.561f),
+		  glm::vec3(0.08f, 0.065f, 0.03f),
+		  glm::vec3(2.5f, 2.1f, 1.3f),
+		  glm::vec3(1.0f, 0.95f, 0.8f),
+		  1.0f, 0.22f, 0.08f },
 
-    // SM_Light_bulb003 – corredor fundo
-    { glm::vec3(-1.451f,  2.169f, -5.951f),
-	  glm::vec3(0.08f, 0.065f, 0.03f),
-	  glm::vec3(2.5f, 2.1f, 1.3f),
-	  glm::vec3(1.0f, 0.95f, 0.8f),
-	  1.0f, 0.22f, 0.08f },
+		  // SM_Light_bulb003 – corredor fundo
+		  { glm::vec3(-1.451f,  2.169f, -5.951f),
+			glm::vec3(0.08f, 0.065f, 0.03f),
+			glm::vec3(2.5f, 2.1f, 1.3f),
+			glm::vec3(1.0f, 0.95f, 0.8f),
+			1.0f, 0.22f, 0.08f },
 };
 static const int NUM_POINT_LIGHTS = 4;
 
@@ -67,6 +67,7 @@ Scene6::Scene6()
 	pShader->LoadShader("Assets", "Scenes/Scene6/Assets.vert", "Scenes/Scene6/Assets.frag");
 	pShader->LoadShader("Skybox", "Scenes/Scene6/skybox.vert", "Scenes/Scene6/skybox.frag");
 	pShader->LoadShader("Blend", "Scenes/Scene6/Blend.vert", "Scenes/Scene6/Blend.frag");
+	pShader->LoadShader("Depth", "Scenes/Scene6/depth.vert", "Scenes/Scene6/depth.frag");
 
 	// Cria o gerenciador de grid e axis
 	pGridAxis = NULL;
@@ -92,6 +93,9 @@ Scene6::Scene6()
 		"Scenes/Scene6/front.bmp",
 		"Scenes/Scene6/back.bmp" });
 
+	// Cria o shadow map
+	pShadowMap = NULL;
+	pShadowMap = new CShadowMap(1024, 1024);
 
 	// 
 	pPlane1.generatePlane(2.0f, 2.0f);
@@ -106,6 +110,11 @@ Scene6::~Scene6()
 	pPlane1.cleanup();
 	pPlane2.cleanup();
 
+	if (pShadowMap)
+	{
+		delete pShadowMap;
+		pShadowMap = NULL;
+	}
 
 	if (pSkybox)
 	{
@@ -163,27 +172,56 @@ void Scene6::DrawScene()
 	// Update timer (must be called at start of frame)
 	pTimer->Update();
 
-	// Clear the color and depth buffers
-	glClearColor(0.1f, 0.1f, 0.15f, 1.0f);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
 	// Create transformations 
-	// Note: In a real application, you would typically calculate the projection and view matrices 
-	// once per frame and pass them to your shaders
 	glm::mat4 projection = glm::perspective(glm::radians(pCamera->Zoom), ASPECT_RATIO, Z_NEAR, Z_FAR);
 	glm::mat4 view = pCamera->GetViewMatrix();
 	glm::mat4 model = glm::mat4(1.0);
 
+	// Matriz do modelo principal (mesma usada no pass normal, precisamos dela aqui também)
+	glm::mat4 assetsModel = glm::mat4(1.0f);
+	assetsModel = glm::rotate(assetsModel, glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+	assetsModel = glm::scale(assetsModel, glm::vec3(0.03f));
+
+	glm::vec4 lampPositionsMax[] = {
+	glm::vec4(14.793f,  18.696f, 72.313f, 1.0f),
+	glm::vec4(97.918f,  18.696f, 72.313f, 1.0f),
+	glm::vec4(-48.365f,  18.696f, 72.313f, 1.0f),
+	glm::vec4(-48.365f,-198.375f, 72.313f, 1.0f),
+	};
+
+	for (int i = 0; i < NUM_POINT_LIGHTS; i++)
+	{
+		glm::vec4 posWorld = assetsModel * lampPositionsMax[i];
+		gPointLights[i].position = glm::vec3(posWorld);
+	}
+
+	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// j. Sombras Projetadas - PASS 1: renderiza a cena do ponto de vista da luz [0]
+	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	float near_plane = 1.0f, far_plane = 50.0f;
+	glm::mat4 lightProjection = glm::perspective(glm::radians(90.0f), 1.0f, near_plane, far_plane);
+	glm::vec3 lightPos = gPointLights[0].position;
+	glm::mat4 lightView = glm::lookAt(lightPos, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+	glm::mat4 lightSpaceMatrix = lightProjection * lightView;
+
+	pShadowMap->BeginRender();
+
+	pShader->Use("Depth");
+	pShader->SetMat4("lightSpaceMatrix", lightSpaceMatrix);
+	pShader->SetMat4("model", assetsModel);
+	pModel->Draw(pShader->GetProgram("Depth"));
+
+	pShadowMap->EndRender(SCR_WIDTH, SCR_HEIGHT);
+
+	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// PASS 2: render normal da cena
+	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	// Clear the color and depth buffers
+	glClearColor(0.1f, 0.1f, 0.15f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Draw the 3D grid
-	//pShader->Use("Grid");
-	//pShader->SetMat4("uProj", projection);
-	//pShader->SetMat4("uView", view);
-	//pShader->SetFloat("uGridSpacing", 1.0f);
-	//pShader->SetFloat("uFadeStart", 18.f);
-	//pShader->SetFloat("uFadeEnd", 100.f);
-	//pShader->SetVec3("uCamPos", pCamera->Position);
-	//pGridAxis->DrawGrid();
 	// Draw the 3D axis
 	pShader->Use("Axis");
 	pShader->SetMat4("uProj", projection);
@@ -199,24 +237,11 @@ void Scene6::DrawScene()
 	view = pCamera->GetViewMatrix();
 	pShader->SetMat4("view", view);
 	pShader->SetVec3("viewPos", pCamera->Position);
-
-	model = glm::mat4(1.0f);
-	model = glm::rotate(model, glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-	model = glm::scale(model, glm::vec3(0.03f));
-	pShader->SetMat4("model", model);
-
-	glm::vec4 lampPositionsMax[] = {
-	glm::vec4(14.793f,  18.696f, 72.313f, 1.0f),
-	glm::vec4(97.918f,  18.696f, 72.313f, 1.0f),
-	glm::vec4(-48.365f,  18.696f, 72.313f, 1.0f),
-	glm::vec4(-48.365f,-198.375f, 72.313f, 1.0f),
-	};
+	pShader->SetMat4("model", assetsModel);
+	pShader->SetMat4("lightSpaceMatrix", lightSpaceMatrix);
 
 	for (int i = 0; i < NUM_POINT_LIGHTS; i++)
 	{
-		glm::vec4 posWorld = model * lampPositionsMax[i];
-		gPointLights[i].position = glm::vec3(posWorld);
-
 		std::string b = "pointLights[" + std::to_string(i) + "]";
 		pShader->SetVec3((b + ".position").c_str(), gPointLights[i].position);
 		pShader->SetVec3((b + ".ambient").c_str(), gPointLights[i].ambient);
@@ -237,6 +262,17 @@ void Scene6::DrawScene()
 	pShader->SetVec3("fogColor", glm::vec3(0.55f, 0.45f, 0.28f));
 	pShader->SetFloat("fogDensity", 0.10f);
 
+	glActiveTexture(GL_TEXTURE3);
+	glBindTexture(GL_TEXTURE_CUBE_MAP, pSkybox->GetSkyboxTexture());
+	pShader->SetInt("uEnvMap", 3);
+	pShader->SetBool("useEnvMap", true);
+	pShader->SetFloat("reflectivity", 0.2f);
+
+	glActiveTexture(GL_TEXTURE4);
+	glBindTexture(GL_TEXTURE_2D, pShadowMap->GetDepthTexture());
+	pShader->SetInt("uShadowMap", 4);
+	pShader->SetBool("useShadow", true);
+
 	pModel->Draw(pShader->GetProgram("Assets"));
 
 	/////////////////////////////////////////////////////////////////////////////////////////////
@@ -247,67 +283,42 @@ void Scene6::DrawScene()
 	pShader->SetMat4("view", view);
 	pSkybox->DrawSkybox();
 
-	
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Opacos (DESTINATION)
-	/*pShader->Use("Blend");
+	// i. Transparência (Blending) - painel de "vidro" translúcido na frente da câmera inicial
+	//
+	// Opacos (DESTINATION) - painel sólido atrás, simula uma parede
+	pShader->Use("Blend");
 	pShader->SetMat4("projection", projection);
 	view = pCamera->GetViewMatrix();
 	pShader->SetMat4("view", view);
 	model = glm::mat4(1.0);
-	model = glm::translate(model, glm::vec3(0.0f, 5.0f, 0.0f));
-	model = glm::rotate(model, glm::radians(90.0f), glm::vec3(1.0, 0.0, 0.0));
+	model = glm::translate(model, glm::vec3(0.0f, 3.0f, 0.0f));
+	model = glm::scale(model, glm::vec3(2.0f));
 	pShader->SetMat4("model", model);
-	pShader->SetVec4("objColor", glm::vec4(1.0f, 0.0f, 0.0f, 0.0f));
+	pShader->SetVec4("objColor", glm::vec4(0.6f, 0.6f, 0.65f, 1.0f));
 	pShader->SetBool("isTexured", false);
-	pPlane1.render();*/
-	
+	pPlane1.render();
 
-	// Transparentes (SOURCE)
-	//glEnable(GL_BLEND);
-	//glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	// Transparentes (SOURCE) - "vidro" azulado na frente do painel opaco
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	glDepthMask(GL_FALSE);
+	glDisable(GL_DEPTH_TEST);
 
-	//pShader->Use("Blend");
-	//pShader->SetMat4("projection", projection);
-	//view = pCamera->GetViewMatrix();
-	//pShader->SetMat4("view", view);
-	//model = glm::mat4(1.0);
-	//model = glm::translate(model, glm::vec3(0.0f, 5.0f, 1.0f));
-	//model = glm::rotate(model, glm::radians(90.0f), glm::vec3(1.0, 0.0, 0.0));
-	//pShader->SetMat4("model", model);
-	//pShader->SetVec4("objColor", glm::vec4(0.0f, 0.0f, 1.0f, 0.6f));
-	//pShader->SetBool("isTexured", false);
-	//pPlane2.render();
+	pShader->Use("Blend");
+	pShader->SetMat4("projection", projection);
+	pShader->SetMat4("view", view);
+	model = glm::mat4(1.0);
+	model = glm::translate(model, glm::vec3(0.0f, 3.0f, 1.0f));
+	model = glm::scale(model, glm::vec3(2.0f));
+	pShader->SetMat4("model", model);
+	pShader->SetVec4("objColor", glm::vec4(0.4f, 0.6f, 0.9f, 0.4f));
+	pShader->SetBool("isTexured", false);
+	pPlane2.render();
 
-	//glDisable(GL_BLEND);
-
-
-	// Transparentes (SOURCE)
-	//glEnable(GL_BLEND);
-	//glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	//glEnable(GL_ALPHA_TEST);
-	//glAlphaFunc(GL_GREATER, 0.5f);
-
-	//pShader->Use("Blend");
-	//pShader->SetMat4("projection", projection);
-	//view = pCamera->GetViewMatrix();
-	//pShader->SetMat4("view", view);
-	//model = glm::mat4(1.0);
-	//model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.0f));
-	//model = glm::rotate(model, glm::radians(-90.0f), glm::vec3(1.0, 0.0, 0.0));
-	//model = glm::rotate(model, glm::radians(180.0f), glm::vec3(0.0, 0.0, 1.0));
-	//pShader->SetMat4("model", model);
-	//pShader->SetVec4("objColor", glm::vec4(1.0f, 1.0f, 1.0f, 1.0f));
-
-	//glActiveTexture(GL_TEXTURE0);
-	//pTextures->ApplyTexture(0);
-	//pShader->SetInt("Texture0", 0);
-	//pShader->SetBool("isTexured", true);
-
-	//pPlane2.render();
-
-	//glDisable(GL_ALPHA_TEST);
-	//glDisable(GL_BLEND);
+	glEnable(GL_DEPTH_TEST);
+	glDepthMask(GL_TRUE);
+	glDisable(GL_BLEND);
 
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -368,5 +379,3 @@ void Scene6::ProcessSceneInput(GLFWwindow* window, float deltaTime)
 		pCamera->ProcessMouseScroll(scrollOffset);
 	}
 }
-
-

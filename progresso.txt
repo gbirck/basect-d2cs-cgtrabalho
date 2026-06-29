@@ -4,8 +4,8 @@ feito - b. Mapeamento de texturas usando Unrap UVW (3DS MAX)
 feito - c. Iluminação com alguma fonte de luz (Point, Spot)
 feito - d. Multi-Textura
 feito - e. SkyBox
-f. Environmap Mapping (SphereMap ou CubeMap)
+feito - f. Environmap Mapping (SphereMap ou CubeMap)
 feito - g. Bump ou Normal Mapping
 feito - h. Neblina (Fog)
-i. Transparência (Blending)
-j. Sombras Projetadas usando Shadow Map
+feito - i. Transparência (Blending)
+feito - j. Sombras Projetadas usando Shadow Map

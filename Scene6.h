@@ -8,10 +8,8 @@
 #include "Engine/CText.h"
 #include "Engine/CSkybox.h"
 #include "Engine/CLoadAssets.h"
-
 #include "Engine/CPrimitives.h"
-
-
+#include "CShadowMap.h"
 
 class Scene6 : public CSceneBase
 {
@@ -48,6 +46,8 @@ private:
 
 	// Skybox
 	CSkybox* pSkybox;
+
+	CShadowMap* pShadowMap;
 
 	CPrimitives pPlane1, pPlane2;
 
