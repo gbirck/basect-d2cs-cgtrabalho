@@ -233,6 +233,9 @@ void Scene6::DrawScene()
 	pShader->SetInt("uDetailMap", 2);
 	pShader->SetFloat("detailScale", 4.0f);
 	pShader->SetBool("useDetail", true);
+	pShader->SetBool("useNormalMap", true);
+	pShader->SetVec3("fogColor", glm::vec3(0.55f, 0.45f, 0.28f));
+	pShader->SetFloat("fogDensity", 0.10f);
 
 	pModel->Draw(pShader->GetProgram("Assets"));
 

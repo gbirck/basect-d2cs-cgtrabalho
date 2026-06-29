@@ -5,7 +5,7 @@ feito - c. Iluminação com alguma fonte de luz (Point, Spot)
 feito - d. Multi-Textura
 feito - e. SkyBox
 f. Environmap Mapping (SphereMap ou CubeMap)
-g. Bump ou Normal Mapping
-h. Neblina (Fog)
+feito - g. Bump ou Normal Mapping
+feito - h. Neblina (Fog)
 i. Transparência (Blending)
 j. Sombras Projetadas usando Shadow Map

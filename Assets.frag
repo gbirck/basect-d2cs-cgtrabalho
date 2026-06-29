@@ -3,13 +3,18 @@
 in vec2 TexCoord;
 in vec3 FragPos;
 in vec3 Normal;
+in mat3 TBN;
 
 out vec4 FragColor;
 
 uniform sampler2D uDiffuseMap;
 uniform sampler2D uDetailMap;
-uniform float     detailScale;
-uniform bool      useDetail;
+uniform float detailScale;
+uniform bool useDetail;
+uniform sampler2D uNormalMap;
+uniform bool useNormalMap;
+uniform vec3  fogColor;
+uniform float fogDensity;
 
 struct PointLight {
     vec3 position;
@@ -54,7 +59,17 @@ void main()
         baseColor *= detail.rgb * 2.0;
     }
 
-    vec3 norm    = normalize(Normal);
+    vec3 norm;
+    if (useNormalMap)
+    {
+        vec4 ns = texture(uNormalMap, TexCoord);
+        if (ns.rgb != vec3(0.0))
+            norm = normalize(TBN * normalize(ns.rgb * 2.0 - 1.0));
+        else
+            norm = normalize(Normal);
+    }
+    else
+    norm = normalize(Normal);
     vec3 viewDir = normalize(viewPos - FragPos);
 
     vec3 result = vec3(0.0);
@@ -62,6 +77,11 @@ void main()
         result += CalcPointLight(pointLights[i], norm, FragPos, viewDir, baseColor);
 
     result = max(result, baseColor * 0.08);
+     
+    float fragDist = length(viewPos - FragPos);
+    float fogFactor = exp(-fogDensity * fogDensity * fragDist * fragDist);
+    fogFactor = clamp(fogFactor, 0.0, 1.0);
+    vec3 finalColor = mix(fogColor, result, fogFactor);
 
-    FragColor = vec4(result, texColor.a);
+    FragColor = vec4(finalColor, texColor.a);
 }
